@@ -1,0 +1,73 @@
+--murder that occurred sometime on Jan.15, 2018 
+--took place in SQL City
+SELECT *
+FROM crime_scene_report
+WHERE date = 20180115
+AND city = 'SQL City'
+AND type = 'murder';
+
+--2 witnesses
+--first witness lives at the last house on "Northwestern Dr"
+--second witness, named Annabel, lives somewhere on "Franklin Ave"
+--first witness is Morty Schapiro (id: 14887):
+SELECT * 
+FROM person
+WHERE address_street_name = 'Northwestern Dr'
+ORDER BY address_number DESC
+LIMIT 1;
+
+--second witness is Annabel Miller (id: 16371):
+SELECT *
+FROM person
+WHERE name LIKE 'Annabel%'
+AND address_street_name = 'Franklin Ave';
+
+--look up witnesses in interview table
+SELECT *
+FROM interview 
+WHERE person_id IN (14887,16371);
+
+--"Get Fit Now Gym" bag
+--membership number starts with "48Z"
+--gold member
+--car plate included "H42W"
+--at the gym on January 9th, same gym as id 16371
+SELECT *
+FROM drivers_license as dl
+INNER JOIN person as p on dl.id = p.license_id
+INNER JOIN get_fit_now_member as gf on p.id = gf.person_id
+INNER JOIN get_fit_now_check_in as ci on gf.id = ci.membership_id
+WHERE plate_number LIKE '%H42W%'
+AND membership_status = 'gold'
+AND membership_id LIKE '48Z%'
+AND check_in_date = 20180109;
+
+--look up interview where id is 67318
+SELECT *
+FROM interview
+WHERE person_id = 67318
+
+--hired by a woman with a lot of money
+--she's around 5'5" or 5'7", red hair and drives a Tesla Model S
+--she attended the SQL Symphony Concert 3 times in December 2017
+WITH CTE AS (
+SELECT 
+person_id,
+COUNT(*) as visits
+FROM facebook_event_checkin
+WHERE date BETWEEN 20171201 AND 20171231
+AND event_name = 'SQL Symphony Concert'
+GROUP BY person_id
+HAVING COUNT(*) >=3
+)
+SELECT *
+FROM drivers_license as dl
+INNER JOIN person as p on dl.id = p.license_id
+INNER JOIN CTE as fb on fb.person_id = p.id
+WHERE hair_color = 'red'
+AND height >= 65
+AND height <= 67
+AND car_make = 'Tesla'
+AND car_model ='Model S' 
+and gender = 'female';
+--Miranda Priestly is the mastermind
