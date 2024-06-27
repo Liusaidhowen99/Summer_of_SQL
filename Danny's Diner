@@ -1,0 +1,9 @@
+-- 1. What is the total amount each customer spent at the restaurant?
+SELECT 
+  customer_id, 
+  SUM(price) as total_spent 
+FROM 
+  SALES as S
+  INNER JOIN MENU as M ON M.product_id = S.product_id 
+GROUP BY 
+  customer_id;
