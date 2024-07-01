@@ -27,3 +27,148 @@ SUM(value) as total_value
 FROM pd2023_wk01
 GROUP BY SPLIT_PART(transaction_code,'-',1),
 customer_code;
+
+
+--Week 2
+---- In the Transactions table, there is a Sort Code field which contains dashes. We need to remove these so just have a 6 digit string
+-- Use the SWIFT Bank Code lookup table to bring in additional information about the SWIFT code and Check Digits of the receiving bank account
+-- Add a field for the Country Code
+      -- Hint: all these transactions take place in the UK so the Country Code should be GB
+-- Create the IBAN as above
+      -- Hint: watch out for trying to combine string fields with numeric fields - check data types
+-- Remove unnecessary fields
+
+SELECT 
+transaction_id,
+'GB' || check_digits || swift_code || REPLACE(sort_code,'-','') || account_number as iban
+FROM pd2023_wk02_transactions as T
+INNER JOIN pd2023_wk02_swift_codes as S on T.bank = S.bank;
+
+--Week 3
+-- For the transactions file:
+    -- Filter the transactions to just look at DSB (help)
+        -- These will be transactions that contain DSB in the Transaction Code field
+    -- Rename the values in the Online or In-person field, Online of the 1 values and In-Person for the 2 values
+    -- Change the date to be the quarter (help)
+    -- Sum the transaction values for each quarter and for each Type of Transaction (Online or In-Person) (help)
+-- For the targets file:
+    -- Pivot the quarterly targets so we have a row for each Type of Transaction and each Quarter (help)
+    -- Rename the fields
+    -- Remove the 'Q' from the quarter field and make the data type numeric (help)
+-- Join the two datasets together (help)
+    -- You may need more than one join clause!
+-- Remove unnecessary fields
+-- Calculate the Variance to Target for each row 
+
+WITH CTE AS (
+SELECT 
+CASE 
+WHEN online_or_in_person = 1 THEN 'Online'
+WHEN online_or_in_person = 2 THEN 'In-Person'
+END as online_in_person,
+DATE_PART('quarter',DATE(transaction_date,'dd/MM/yyyy HH24:MI:SS')) as quarter,
+SUM(value) as total_value
+FROM pd2023_wk01
+WHERE SPLIT_PART(transaction_code,'-',1) = 'DSB'
+GROUP BY 1,2
+)
+SELECT 
+online_or_in_person,
+REPLACE(T.quarter,'Q','')::int as quarter,
+V.total_value,
+target,
+V.total_value - target as variance_from_target
+FROM pd2023_wk03_targets as T
+UNPIVOT(target FOR quarter IN (Q1,Q2,Q3,Q4))
+INNER JOIN CTE AS V ON T.ONLINE_OR_IN_PERSON = V.online_in_person AND REPLACE(T.quarter,'Q','')::int = V.quarter;
+
+--Week 4
+-- We want to stack the tables on top of one another, since they have the same fields in each sheet. We can do this one of 2 ways:
+    -- Drag each table into the canvas and use a union step to stack them on top of one another
+    -- Use a wildcard union in the input step of one of the tables
+-- Some of the fields aren't matching up as we'd expect, due to differences in spelling. Merge these fields together
+-- Make a Joining Date field based on the Joining Day, Table Names and the year 2023
+-- Now we want to reshape our data so we have a field for each demographic, for each new customer (help)
+-- Make sure all the data types are correct for each field
+-- Remove duplicates (help)
+    -- If a customer appears multiple times take their earliest joining date
+
+WITH CTE AS (
+SELECT *, 'pd2023_wk04_january' as tablename FROM pd2023_wk04_january
+
+UNION ALL 
+
+SELECT *, 'pd2023_wk04_february' as tablename FROM pd2023_wk04_february
+
+UNION ALL 
+
+SELECT *, 'pd2023_wk04_march' as tablename FROM pd2023_wk04_march
+
+UNION ALL 
+
+SELECT *, 'pd2023_wk04_april' as tablename FROM pd2023_wk04_april
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_may' as tablename FROM pd2023_wk04_may
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_june' as tablename FROM pd2023_wk04_june
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_july' as tablename FROM pd2023_wk04_july
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_august' as tablename FROM pd2023_wk04_august
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_september' as tablename FROM pd2023_wk04_september
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_october' as tablename FROM pd2023_wk04_october
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_november' as tablename FROM pd2023_wk04_november
+
+UNION ALL
+
+SELECT *, 'pd2023_wk04_december' as tablename FROM pd2023_wk04_december
+)
+, PRE_PIVOT AS (
+SELECT 
+id,
+date_from_parts(2023,DATE_PART('month',DATE(SPLIT_PART(tablename,'_',3),'MMMM')),joining_day) as joining_date,
+demographic,
+value
+FROM CTE
+)
+,POST_PIVOT AS (
+SELECT 
+id,
+joining_date,
+ethnicity,
+account_type,
+date_of_birth::date as date_of_birth,
+ROW_NUMBER() OVER(PARTITION BY id ORDER BY joining_date ASC) as rn
+FROM PRE_PIVOT
+PIVOT(MAX(value) FOR demographic IN ('Ethnicity','Account Type','Date of Birth')) AS P
+(id,
+joining_date,
+ethnicity,
+account_type,
+date_of_birth)
+)
+SELECT 
+id,
+joining_date,
+account_type,
+date_of_birth,
+ethnicity
+FROM post_pivot
+WHERE rn = 1;
